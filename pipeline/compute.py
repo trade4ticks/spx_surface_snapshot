@@ -10,6 +10,8 @@ import math
 from calendar import monthrange
 from datetime import date, timedelta
 
+from scipy.stats import norm as _norm
+
 from .config import (
     CONVEXITY_TRIPLES,
     DELTA_TO_COORD,
@@ -66,6 +68,29 @@ def _get_iv(
     return d["iv"] if d else None
 
 
+def _infer_strike(F: float, iv: float, put_delta_int: int, dte: int) -> float | None:
+    """
+    Compute strike analytically from forward, IV, and put-delta.
+
+    Inverts the forward put-delta formula used by the interpolation pipeline:
+        forward put delta = N(d1) - 1,  d1 = (-k + 0.5w) / sqrt(w)
+    Solving for k:
+        d1 = N_inv(1 - abs_delta)
+        k  = -d1 * sqrt(w) + 0.5 * w
+        K  = F * exp(k)
+
+    Used as fallback when spx_surface.strike is NULL (data pre-dates the
+    column being added to the schema).
+    """
+    T = dte / 365.0
+    w = iv ** 2 * T
+    sqrt_w = math.sqrt(max(w, 1e-12))
+    abs_delta = put_delta_int / 100.0
+    d1 = _norm.ppf(1.0 - abs_delta)
+    k = -d1 * sqrt_w + 0.5 * w
+    return F * math.exp(k)
+
+
 def _get_strike(
     dte: int,
     label: str,
@@ -75,13 +100,29 @@ def _get_strike(
     """
     Return strike for (dte, delta_label).
     'atm' uses spx_atm.atm_strike (= atm_forward); others use spx_surface.strike.
+    Falls back to computing the strike from F and IV when strike is NULL in
+    spx_surface (affects data processed before the strike column was added).
     """
     if label == "atm":
         d = atm.get(dte)
         return d["atm_strike"] if d else None
+
     pd_int = DELTA_TO_PD[label]
     d = surface.get(dte, {}).get(pd_int)
-    return d["strike"] if d else None
+    if d is None:
+        return None
+    if d["strike"] is not None:
+        return d["strike"]
+
+    # Fallback: infer from forward (atm) + stored IV
+    atm_d = atm.get(dte)
+    if atm_d is None:
+        return None
+    F  = atm_d.get("atm_forward")
+    iv = d.get("iv")
+    if not F or not iv or iv <= 0:
+        return None
+    return _infer_strike(F, iv, pd_int, dte)
 
 
 # ---------------------------------------------------------------------------
