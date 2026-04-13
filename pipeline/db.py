@@ -100,3 +100,55 @@ def fetch_processed_quote_times(
             (trade_date_str,),
         )
         return {row[0] for row in cur.fetchall()}
+
+
+def fetch_source_dte_counts(
+    conn: psycopg2.extensions.connection,
+    trade_date_str: str,
+) -> dict:
+    """
+    Count distinct TARGET DTEs available per quote_time in spx_atm.
+
+    Returns:
+        { datetime.time: int }
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT quote_time, COUNT(DISTINCT dte)
+            FROM spx_atm
+            WHERE trade_date = %s AND dte = ANY(%s)
+            GROUP BY quote_time
+            """,
+            (trade_date_str, TARGET_DTES),
+        )
+        return {row[0]: row[1] for row in cur.fetchall()}
+
+
+def fetch_processed_dte_counts(
+    conn: psycopg2.extensions.connection,
+    trade_date_str: str,
+) -> dict:
+    """
+    Count non-null forward columns per quote_time in surface_metrics_core.
+    Used as a proxy for how many DTEs were available when the snapshot
+    was last computed.
+
+    Returns:
+        { datetime.time: int }
+    """
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT quote_time,
+                (CASE WHEN forward_1d   IS NOT NULL THEN 1 ELSE 0 END
+               + CASE WHEN forward_7d   IS NOT NULL THEN 1 ELSE 0 END
+               + CASE WHEN forward_30d  IS NOT NULL THEN 1 ELSE 0 END
+               + CASE WHEN forward_90d  IS NOT NULL THEN 1 ELSE 0 END
+               + CASE WHEN forward_180d IS NOT NULL THEN 1 ELSE 0 END)
+            FROM surface_metrics_core
+            WHERE trade_date = %s
+            """,
+            (trade_date_str,),
+        )
+        return {row[0]: row[1] for row in cur.fetchall()}
