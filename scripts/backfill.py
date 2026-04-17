@@ -131,6 +131,7 @@ def run_backfill(start: date, end: date, force: bool = False) -> None:
                 process_date(d, conn, force=force)
             except Exception as exc:
                 log.error("Date %s failed: %s", d.isoformat(), exc, exc_info=True)
+                conn.rollback()
             d += timedelta(days=1)
 
     log.info("Backfill complete: %s → %s", start.isoformat(), end.isoformat())
