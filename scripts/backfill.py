@@ -22,7 +22,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 # Allow running as a script from the project root
@@ -140,13 +140,17 @@ def run_backfill(start: date, end: date, force: bool = False) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+def _parse_date(raw: str) -> date:
+    return datetime.strptime(raw, "%Y%m%d").date()
+
+
 def _prompt_date(prompt: str) -> date:
     while True:
         raw = input(prompt).strip()
         try:
-            return date.fromisoformat(raw)
+            return _parse_date(raw)
         except ValueError:
-            print("  Invalid date — use YYYY-MM-DD format.")
+            print("  Invalid date — use YYYYMMDD format.")
 
 
 def main() -> None:
@@ -160,23 +164,23 @@ def main() -> None:
     )
     parser.add_argument(
         "--start",
-        help="Start date YYYY-MM-DD (skips prompt if provided)",
+        help="Start date YYYYMMDD (skips prompt if provided)",
     )
     parser.add_argument(
         "--end",
-        help="End date YYYY-MM-DD (skips prompt if provided)",
+        help="End date YYYYMMDD (skips prompt if provided)",
     )
     args = parser.parse_args()
 
     if args.start:
-        start = date.fromisoformat(args.start)
+        start = _parse_date(args.start)
     else:
-        start = _prompt_date("Start date (YYYY-MM-DD): ")
+        start = _prompt_date("Start date (YYYYMMDD): ")
 
     if args.end:
-        end = date.fromisoformat(args.end)
+        end = _parse_date(args.end)
     else:
-        end = _prompt_date("End date   (YYYY-MM-DD): ")
+        end = _prompt_date("End date   (YYYYMMDD): ")
 
     if start > end:
         print("Error: start date must be <= end date")
