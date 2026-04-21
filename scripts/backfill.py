@@ -31,7 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import pandas as pd
 
 from pipeline.compute import compute_snapshot_metrics
-from pipeline.config  import DATA_ROOT, TARGET_DTES
+from pipeline.config  import DATA_ROOTS, TARGET_DTES
 from pipeline.db      import (
     fetch_day_atm,
     fetch_day_surface,
@@ -91,7 +91,7 @@ def process_date(
         return 0
 
     # -------------------------------------------------------- Parquet load (VIX)
-    parquet_df = load_parquet_day(DATA_ROOT, trade_date)
+    parquet_df = load_parquet_day(DATA_ROOTS, trade_date)
     if parquet_df.empty:
         log.warning("  No parquet data found — VIX columns will be NULL")
 

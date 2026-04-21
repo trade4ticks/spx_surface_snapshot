@@ -1,6 +1,6 @@
 """
 Pipeline configuration.
-Override DATA_ROOT and DB_URL via environment variables (or a .env file at project root).
+Override DATA_ROOTS and DB_URL via environment variables (or a .env file at project root).
 """
 import os
 from pathlib import Path
@@ -12,7 +12,10 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 # ---------------------------------------------------------------------------
 # Paths and database — same env vars as interpolation project
 # ---------------------------------------------------------------------------
-DATA_ROOT = Path(os.environ.get("SPX_DATA_ROOT", "/data/spx_options"))
+DATA_ROOTS = [
+    Path(p.strip())
+    for p in os.environ.get("SPX_DATA_ROOTS", "/data/spx_options").split(",")
+]
 DB_URL    = os.environ.get("SPX_DB_URL", "postgresql://user:password@localhost:5432/spx")
 
 # ---------------------------------------------------------------------------

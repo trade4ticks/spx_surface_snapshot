@@ -32,7 +32,7 @@ import pandas as pd
 import pytz
 
 from pipeline.compute import compute_snapshot_metrics
-from pipeline.config  import DATA_ROOT, TARGET_DTES
+from pipeline.config  import DATA_ROOTS, TARGET_DTES
 from pipeline.db      import (
     fetch_day_atm,
     fetch_day_surface,
@@ -113,7 +113,7 @@ def process_intraday(today, conn) -> int:
     surface_by_qt = fetch_day_surface(conn, date_str)
 
     # ---- Load parquet data for VIX (once for the whole day) --------------
-    parquet_df = load_parquet_day(DATA_ROOT, today)
+    parquet_df = load_parquet_day(DATA_ROOTS, today)
     if parquet_df.empty:
         log.warning("No parquet data — VIX columns will be NULL")
 

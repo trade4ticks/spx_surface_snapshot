@@ -360,19 +360,27 @@ def compute_vix_for_snapshot(
 # Parquet loading helpers (shared with backfill)
 # ---------------------------------------------------------------------------
 
-def load_parquet_day(data_root, trade_date) -> pd.DataFrame:
+def load_parquet_day(data_roots, trade_date) -> pd.DataFrame:
     """
     Load all parquet files for trade_date, tagging each row with
     _expiry (Timestamp) and _session ('AM'/'PM').
 
-    Mirrors the discovery logic in the interpolation pipeline.
+    Searches each directory in data_roots for the trade_date folder.
     Returns an empty DataFrame if no files found.
     """
     from datetime import datetime as dt
     from pathlib import Path
 
-    trade_dir = Path(data_root) / trade_date.strftime("%Y%m%d")
-    if not trade_dir.is_dir():
+    if not isinstance(data_roots, (list, tuple)):
+        data_roots = [data_roots]
+
+    trade_dir = None
+    for root in data_roots:
+        candidate = Path(root) / trade_date.strftime("%Y%m%d")
+        if candidate.is_dir():
+            trade_dir = candidate
+            break
+    if trade_dir is None:
         return pd.DataFrame()
 
     frames = []
