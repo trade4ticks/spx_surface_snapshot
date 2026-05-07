@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import psycopg2.extras
 
+from pipeline.catalog_def import NO_TRANSFORM, Z_ONLY, base_column_names
 from pipeline.config import (
     CONVEXITY_TRIPLES,
     IV_MATRIX_DELTAS,
@@ -42,21 +43,9 @@ _CATALOG_SQL_PATH = Path(__file__).resolve().parent.parent / "sql" / "catalog.sq
 
 
 # ---------------------------------------------------------------------------
-# Skip rules — must mirror sql/w4_alter.sql
+# Skip rules + base column list come from pipeline.catalog_def — single source
+# of truth shared with scripts/backfill_w4.py.
 # ---------------------------------------------------------------------------
-
-_NO_TRANSFORM = {
-    "trade_date", "quote_time",
-    "day_of_week", "days_to_monthly_opex",
-    "spot",
-    "forward_1d", "forward_7d", "forward_30d", "forward_90d", "forward_180d",
-}
-
-_Z_ONLY = {
-    "log_ret_d", "log_ret_1w", "log_ret_1m",
-    "vov_30d_1m",
-    "spot_vol_30d_1m", "spot_vol_30d_3m",
-}
 
 _WING_DESC = {
     "10p": "10-delta put",
@@ -251,9 +240,9 @@ def base_metric_rows():
 def transform_rows(base_rows):
     for base in base_rows:
         col = base["column_name"]
-        if col in _NO_TRANSFORM:
+        if col in NO_TRANSFORM:
             continue
-        z_only = col in _Z_ONLY
+        z_only = col in Z_ONLY
 
         # z (always emitted for eligible bases)
         yield _row(
@@ -284,7 +273,23 @@ def transform_rows(base_rows):
         )
 
 
+def _verify_consistency_with_catalog_def() -> None:
+    """Sanity check: this script's base_metric_rows() must yield the same
+    column set as pipeline.catalog_def.base_column_names()."""
+    rows_set    = {r["column_name"] for r in base_metric_rows()}
+    canonical   = set(base_column_names())
+    only_rows   = rows_set - canonical
+    only_canon  = canonical - rows_set
+    if only_rows or only_canon:
+        raise AssertionError(
+            "Catalog drift between build_catalog.py and pipeline/catalog_def.py:\n"
+            f"  in build_catalog only:  {sorted(only_rows)}\n"
+            f"  in catalog_def only:    {sorted(only_canon)}"
+        )
+
+
 def build_catalog_rows() -> list[dict]:
+    _verify_consistency_with_catalog_def()
     bases = list(base_metric_rows())
     transforms = list(transform_rows(bases))
     return bases + transforms
