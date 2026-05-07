@@ -16,11 +16,14 @@ from .config import (
     CONVEXITY_TRIPLES,
     DELTA_TO_COORD,
     DELTA_TO_PD,
+    IV_MATRIX_DELTAS,
+    RISK_REVERSAL_SPECS,
     SKEW_PAIRS,
     TARGET_DTES,
     TERM_RATIO_PAIRS,
     TERM_SLOPE_DELTAS,
     TERM_SLOPE_PAIRS,
+    VIX_BASIS_PAIRS,
 )
 
 
@@ -261,9 +264,8 @@ def compute_snapshot_metrics(
 
     # ------------------------------------------------------------ IV matrix
     for dte in TARGET_DTES:
-        row[f"iv_{dte}d_25p"] = _get_iv(dte, "25p", atm, surface)
-        row[f"iv_{dte}d_atm"] = _get_iv(dte, "atm", atm, surface)
-        row[f"iv_{dte}d_25c"] = _get_iv(dte, "25c", atm, surface)
+        for label in IV_MATRIX_DELTAS:
+            row[f"iv_{dte}d_{label}"] = _get_iv(dte, label, atm, surface)
 
     # -------------------------------------------------------------------VIX
     for dte in TARGET_DTES:
@@ -296,5 +298,19 @@ def compute_snapshot_metrics(
         for ll, lc, lr in CONVEXITY_TRIPLES:
             col      = f"convex_{dte}d_{ll}_{lc}_{lr}"
             row[col] = _convexity(dte, ll, lc, lr, atm, surface)
+
+    # --------------------------------------------------------- risk reversal
+    for dte, delta in RISK_REVERSAL_SPECS:
+        iv_p = _get_iv(dte, f"{delta}p", atm, surface)
+        iv_c = _get_iv(dte, f"{delta}c", atm, surface)
+        col  = f"rr_{dte}d_{delta}"
+        row[col] = (iv_c - iv_p) if (iv_p is not None and iv_c is not None) else None
+
+    # ------------------------------------------------------------- vix basis
+    for dte_a, dte_b in VIX_BASIS_PAIRS:
+        a = vix.get(dte_a)
+        b = vix.get(dte_b)
+        col = f"vix_basis_{dte_a}d_{dte_b}d"
+        row[col] = (a - b) if (a is not None and b is not None) else None
 
     return row

@@ -15,7 +15,8 @@ from .config import DB_URL
 
 logger = logging.getLogger(__name__)
 
-_SCHEMA_PATH = Path(__file__).parent.parent / "sql" / "schema.sql"
+_SQL_DIR = Path(__file__).parent.parent / "sql"
+_SCHEMA_FILES = ["schema.sql", "w2_alter.sql", "w3_alter.sql", "w4_alter.sql"]
 
 
 # ---------------------------------------------------------------------------
@@ -49,11 +50,18 @@ def get_connection() -> psycopg2.extensions.connection:
 
 
 def init_db() -> None:
-    """Create surface_metrics_core table and index if they don't exist."""
-    sql = _SCHEMA_PATH.read_text()
+    """
+    Apply all schema files in order: base table + W2/W3/W4 ALTERs.
+    Every statement is idempotent (CREATE/ADD COLUMN IF NOT EXISTS).
+    """
     with get_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql)
+            for fname in _SCHEMA_FILES:
+                path = _SQL_DIR / fname
+                if not path.exists():
+                    logger.warning("Schema file missing: %s", path)
+                    continue
+                cur.execute(path.read_text())
         conn.commit()
     logger.info("Schema initialised (or already current)")
 
@@ -62,18 +70,19 @@ def init_db() -> None:
 # Upsert
 # ---------------------------------------------------------------------------
 
-# All columns of surface_metrics_core in declaration order
+# All columns of surface_metrics_core in declaration order.
+# W1 = original, W2 = wing IVs / 10d convex / RR / VIX basis.
 _COLUMNS = [
     "trade_date", "quote_time",
     "day_of_week", "days_to_monthly_opex",
     "spot",
     "forward_1d", "forward_7d", "forward_30d", "forward_90d", "forward_180d",
-    # IV matrix
-    "iv_1d_25p", "iv_1d_atm", "iv_1d_25c",
-    "iv_7d_25p", "iv_7d_atm", "iv_7d_25c",
-    "iv_30d_25p", "iv_30d_atm", "iv_30d_25c",
-    "iv_90d_25p", "iv_90d_atm", "iv_90d_25c",
-    "iv_180d_25p", "iv_180d_atm", "iv_180d_25c",
+    # IV matrix (W1 25p/atm/25c + W2 10p/10c)
+    "iv_1d_10p",   "iv_1d_25p",   "iv_1d_atm",   "iv_1d_25c",   "iv_1d_10c",
+    "iv_7d_10p",   "iv_7d_25p",   "iv_7d_atm",   "iv_7d_25c",   "iv_7d_10c",
+    "iv_30d_10p",  "iv_30d_25p",  "iv_30d_atm",  "iv_30d_25c",  "iv_30d_10c",
+    "iv_90d_10p",  "iv_90d_25p",  "iv_90d_atm",  "iv_90d_25c",  "iv_90d_10c",
+    "iv_180d_10p", "iv_180d_25p", "iv_180d_atm", "iv_180d_25c", "iv_180d_10c",
     # VIX
     "vix_1d", "vix_7d", "vix_30d", "vix_90d", "vix_180d",
     # Term ratios
@@ -93,12 +102,17 @@ _COLUMNS = [
     "term_slope_1_7_25p", "term_slope_1_7_atm", "term_slope_1_7_25c",
     "term_slope_7_30_25p", "term_slope_7_30_atm", "term_slope_7_30_25c",
     "term_slope_30_90_25p", "term_slope_30_90_atm", "term_slope_30_90_25c",
-    # Convexity
-    "convex_1d_10p_25p_atm", "convex_1d_atm_25c_10c", "convex_1d_25p_atm_25c",
-    "convex_7d_10p_25p_atm", "convex_7d_atm_25c_10c", "convex_7d_25p_atm_25c",
-    "convex_30d_10p_25p_atm", "convex_30d_atm_25c_10c", "convex_30d_25p_atm_25c",
-    "convex_90d_10p_25p_atm", "convex_90d_atm_25c_10c", "convex_90d_25p_atm_25c",
-    "convex_180d_10p_25p_atm", "convex_180d_atm_25c_10c", "convex_180d_25p_atm_25c",
+    # Convexity (W1 + W2 10p_atm_10c symmetric)
+    "convex_1d_10p_25p_atm",   "convex_1d_atm_25c_10c",   "convex_1d_25p_atm_25c",   "convex_1d_10p_atm_10c",
+    "convex_7d_10p_25p_atm",   "convex_7d_atm_25c_10c",   "convex_7d_25p_atm_25c",   "convex_7d_10p_atm_10c",
+    "convex_30d_10p_25p_atm",  "convex_30d_atm_25c_10c",  "convex_30d_25p_atm_25c",  "convex_30d_10p_atm_10c",
+    "convex_90d_10p_25p_atm",  "convex_90d_atm_25c_10c",  "convex_90d_25p_atm_25c",  "convex_90d_10p_atm_10c",
+    "convex_180d_10p_25p_atm", "convex_180d_atm_25c_10c", "convex_180d_25p_atm_25c", "convex_180d_10p_atm_10c",
+    # W2: Risk reversal
+    "rr_1d_25", "rr_7d_25", "rr_30d_25", "rr_90d_25", "rr_180d_25",
+    "rr_30d_10", "rr_90d_10",
+    # W2: VIX basis
+    "vix_basis_1d_30d", "vix_basis_30d_90d",
 ]
 
 _INSERT_COLS   = ", ".join(_COLUMNS)

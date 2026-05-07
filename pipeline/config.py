@@ -71,6 +71,7 @@ CONVEXITY_TRIPLES: list[tuple[str, str, str]] = [
     ("10p", "25p", "atm"),   # coords: 10, 25, 50
     ("atm", "25c", "10c"),   # coords: 50, 75, 90
     ("25p", "atm", "25c"),   # coords: 25, 50, 75
+    ("10p", "atm", "10c"),   # coords: 10, 50, 90  (W2 — symmetric 10d butterfly)
 ]
 
 # Term slope DTE pairs: (dte_a, dte_b) — forward vol between the two tenors
@@ -80,6 +81,33 @@ TERM_SLOPE_DELTAS: list[str]             = ["25p", "atm", "25c"]
 
 # Term ratio DTE pairs: iv_a / iv_b using ATM IV
 TERM_RATIO_PAIRS: list[tuple[int, int]] = [(1, 7), (7, 30), (30, 90)]
+
+# ---------------------------------------------------------------------------
+# Wave 2 metric specs
+# ---------------------------------------------------------------------------
+
+# IV deltas captured as their own columns in the IV matrix (per TARGET_DTE).
+# Order is presentation order; column name = iv_{dte}d_{label}.
+IV_MATRIX_DELTAS: list[str] = ["10p", "25p", "atm", "25c", "10c"]
+
+# Risk reversal: (dte, delta_str)  →  column = rr_{dte}d_{delta_str},
+# value = iv_{dte}d_{delta}c  -  iv_{dte}d_{delta}p
+RISK_REVERSAL_SPECS: list[tuple[int, str]] = [
+    (1,   "25"),
+    (7,   "25"),
+    (30,  "25"),
+    (90,  "25"),
+    (180, "25"),
+    (30,  "10"),
+    (90,  "10"),
+]
+
+# VIX basis: (dte_a, dte_b)  →  column = vix_basis_{a}d_{b}d,
+# value = vix_{a}d - vix_{b}d
+VIX_BASIS_PAIRS: list[tuple[int, int]] = [
+    (1,  30),
+    (30, 90),
+]
 
 # ---------------------------------------------------------------------------
 # Parquet column names (step-2 output schema)
