@@ -6,8 +6,10 @@ new snapshots; this script reads them back and computes the time-series
 W3 base metrics and the W4 chg/z transforms.
 
 Architecture:
-  - Pull the last ~100 calendar days of base columns (covers the 63-trading-
-    day rolling windows with a buffer).
+  - Pull the last ~200 calendar days of base columns.  The longest
+    dependency chain is z_rv_3m / z_spot_vol_30d_3m / z_vrp_3m, which need
+    63td (z window) + 63td (underlying rolling) = 126 trading days
+    ≈ 180 calendar days; 200 adds a buffer for holidays.
   - Group by quote_time, sort by trade_date, compute W3 then W4.
   - UPDATE rows whose trade_date falls inside the catch-up window
     (default: last 3 calendar days), so any slice that was missed or
@@ -241,9 +243,12 @@ def main() -> None:
                 return
         today = now_et.date()
 
-    # Need 63 trading days of lookback for the oldest date in the catch-up
-    # window; ~95 calendar days covers that with weekends.  Pad for safety.
-    history_start = today - timedelta(days=100 + args.catchup_days)
+    # Need enough history for the longest dependency chain:
+    #   z_rv_3m, z_spot_vol_30d_3m, z_vrp_3m, z_vrp_ratio_3m
+    #   = 63td z-window  +  63td underlying rolling window
+    #   = 126 trading days ≈ 180 calendar days
+    # 200 calendar days adds a buffer for holidays and market closures.
+    history_start = today - timedelta(days=200 + args.catchup_days)
     update_start  = today - timedelta(days=args.catchup_days)
 
     log.info(
