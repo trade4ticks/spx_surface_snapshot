@@ -33,11 +33,12 @@ After running this, re-run:
 
 Both W3 and W4 use rolling windows that look back into the recomputed
 range, so they must be re-derived across the full table — even rows
-outside your --range may have had stale W3/W4 if their lookback windows
+outside this range may have had stale W3/W4 if their lookback windows
 included the bad data.
 
 Usage:
-    python scripts/backfill_w1w2_nonvix.py --range 2021-01-01 2022-06-30
+    python scripts/backfill_w1w2_nonvix.py                       # prompts for dates
+    python scripts/backfill_w1w2_nonvix.py --start 20210101 --end 20220630
 """
 from __future__ import annotations
 
@@ -164,19 +165,37 @@ def process_date(conn, trade_date: date) -> int:
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _parse_date(raw: str) -> date:
+    return datetime.strptime(raw, "%Y%m%d").date()
+
+
+def _prompt_date(prompt: str) -> date:
+    while True:
+        raw = input(prompt).strip()
+        try:
+            return _parse_date(raw)
+        except ValueError:
+            print("  Invalid date — use YYYYMMDD format.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(
         description="Recompute W1+W2 (excluding vix_*d) for a date range"
     )
     parser.add_argument(
-        "--range", nargs=2, metavar=("START", "END"),
-        required=True,
-        help="YYYY-MM-DD YYYY-MM-DD inclusive",
+        "--start", help="Start date YYYYMMDD (skips prompt if provided)",
+    )
+    parser.add_argument(
+        "--end", help="End date YYYYMMDD (skips prompt if provided)",
     )
     args = parser.parse_args()
 
-    start = datetime.strptime(args.range[0], "%Y-%m-%d").date()
-    end   = datetime.strptime(args.range[1], "%Y-%m-%d").date()
+    start = _parse_date(args.start) if args.start else _prompt_date("Start date (YYYYMMDD): ")
+    end   = _parse_date(args.end)   if args.end   else _prompt_date("End date   (YYYYMMDD): ")
+
+    if start > end:
+        print("Error: start date must be <= end date")
+        sys.exit(1)
 
     init_db()  # idempotent
 
