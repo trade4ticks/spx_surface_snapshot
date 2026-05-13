@@ -22,8 +22,9 @@ Architecture:
 Single vectorized pass; minutes for years of history.
 
 Usage:
-    python scripts/backfill_w3.py --all
-    python scripts/backfill_w3.py --range 2024-01-01 2024-12-31
+    python scripts/backfill_w3.py --all                              # full table
+    python scripts/backfill_w3.py                                    # prompts for start/end
+    python scripts/backfill_w3.py --start 20240101 --end 20241231
 """
 from __future__ import annotations
 
@@ -170,19 +171,41 @@ def upsert_w3(
 # Entry point
 # ---------------------------------------------------------------------------
 
+def _parse_date(raw: str) -> date:
+    return datetime.strptime(raw, "%Y%m%d").date()
+
+
+def _prompt_date(prompt: str) -> date:
+    while True:
+        raw = input(prompt).strip()
+        try:
+            return _parse_date(raw)
+        except ValueError:
+            print("  Invalid date — use YYYYMMDD format.")
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Backfill Wave 3 columns")
-    group = parser.add_mutually_exclusive_group(required=True)
-    group.add_argument(
+    parser.add_argument(
         "--all", action="store_true",
-        help="Update every row in surface_metrics_core",
+        help="Update every row in surface_metrics_core (skips date prompts)",
     )
-    group.add_argument(
-        "--range", nargs=2, metavar=("START", "END"),
-        help="YYYY-MM-DD YYYY-MM-DD inclusive (history is still loaded "
-             "in full so rolling windows have enough lookback)",
+    parser.add_argument(
+        "--start", help="Start date YYYYMMDD (skips prompt if provided)",
+    )
+    parser.add_argument(
+        "--end", help="End date YYYYMMDD (skips prompt if provided)",
     )
     args = parser.parse_args()
+
+    if args.all:
+        start = end = None
+    else:
+        start = _parse_date(args.start) if args.start else _prompt_date("Start date (YYYYMMDD): ")
+        end   = _parse_date(args.end)   if args.end   else _prompt_date("End date   (YYYYMMDD): ")
+        if start > end:
+            print("Error: start date must be <= end date")
+            sys.exit(1)
 
     init_db()  # idempotent — ensures W3 columns exist
 
@@ -204,8 +227,6 @@ def main() -> None:
             n = upsert_w3(conn, result)
             log.info("Done. %d rows updated (full table).", n)
         else:
-            start = datetime.strptime(args.range[0], "%Y-%m-%d").date()
-            end   = datetime.strptime(args.range[1], "%Y-%m-%d").date()
             n = upsert_w3(conn, result, start, end)
             log.info("Done. %d rows updated in %s..%s.", n, start, end)
     finally:
